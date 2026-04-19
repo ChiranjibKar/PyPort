@@ -14,12 +14,6 @@
   <img src="https://img.shields.io/badge/Status-Active-success?style=for-the-badge"/>
 </p>
 
-<p align="center">
-  <a href="https://github.com/yourusername/pyport/releases/latest">
-    <img src="https://img.shields.io/badge/⬇ Download%20PyPort-.exe-ff00e5?style=for-the-badge&logo=windows&logoColor=white"/>
-  </a>
-</p>
-
 ---
 
 ## 🧠 Overview
