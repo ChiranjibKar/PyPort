@@ -52,7 +52,7 @@ Built with a modern **Neon UI using PyQt6**, PyPort simplifies package managemen
 
 ### 💻 Software
 
-* Python 3.8+
+* Python 3.12+
 * Windows OS (recommended)
 
 ### 📦 Libraries
@@ -109,8 +109,7 @@ It ensures reliable and controlled Python package deployment without external co
 ## 👨‍💻 Author
 
 <p align="center">
-  <b>Chiranjib Kar</b><br>
-  Co-Developer: Biswajit Das  
+  <b>Chiranjib Kar</b>
 </p>
 
 ---
