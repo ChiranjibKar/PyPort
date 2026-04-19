@@ -1,52 +1,59 @@
-<h1 align="center">⚡ Telemetry Frame Range Investigator ⚡</h1>
+<h1 align="center">⚡ PyPort — Offline Python Environment Manager ⚡</h1>
 
 <p align="center">
-  <img src="https://capsule-render.vercel.app/api?type=waving&color=0:00f5ff,100:7c3cff&height=120&section=header&text=Telemetry%20Analyzer&fontSize=30&fontColor=ffffff&animation=fadeIn"/>
+  <img src="https://capsule-render.vercel.app/api?type=waving&color=0:00e5ff,100:ff00e5&height=120&section=header&text=PyPort&fontSize=32&fontColor=ffffff&animation=fadeIn"/>
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/License-Custom%20No--Modification-red?style=for-the-badge"/>
-  <img src="https://img.shields.io/badge/Python-3.13-blue?style=for-the-badge&logo=python"/>
+  <a href="./LICENSE">
+    <img src="https://img.shields.io/badge/License-CBLSL%20v2.0-red?style=for-the-badge"/>
+  </a>
+  <img src="https://img.shields.io/badge/Python-3.12+-blue?style=for-the-badge&logo=python"/>
   <img src="https://img.shields.io/badge/PyQt6-GUI-green?style=for-the-badge&logo=qt"/>
-  <img src="https://img.shields.io/badge/Telemetry-Engineering-purple?style=for-the-badge"/>
+  <img src="https://img.shields.io/badge/Offline-Ready-purple?style=for-the-badge"/>
   <img src="https://img.shields.io/badge/Status-Active-success?style=for-the-badge"/>
 </p>
 
----
-
-> 🚫 Modification of this source code is strictly prohibited.
+<p align="center">
+  <a href="https://github.com/yourusername/pyport/releases/latest">
+    <img src="https://img.shields.io/badge/⬇ Download%20PyPort-.exe-ff00e5?style=for-the-badge&logo=windows&logoColor=white"/>
+  </a>
+</p>
 
 ---
 
 ## 🧠 Overview
 
-This application is a powerful Python-based GUI tool designed for extracting, analyzing, and validating telemetry frame data from structured documents such as PDF, DOCX, and TXT files. It intelligently parses frame numbers and associated word sequences, applies configurable offsets, and detects irregularities in data ordering.
+PyPort is a powerful GUI-based tool designed to manage Python environments in **offline or air-gapped systems**. It enables seamless transfer of dependencies between online and offline machines, eliminating the need for internet access during installation.
 
-Built with a visually enhanced Neon Circuit interface using PyQt6, the tool provides an intuitive and efficient environment for engineers to inspect complex telemetry mappings. With support for visualization and structured export, it bridges the gap between raw telemetry logs and actionable engineering insights.
+Built with a visually enhanced **Neon UI using PyQt6**, PyPort provides an intuitive and efficient workflow for package management, automation, and deployment in restricted environments.
 
 ---
 
 ## ✨ Features
 
-🚀 **Smart Data Extraction**
+🚀 **Package Management**
 
-* 📂 Load PDF, DOCX, and TXT files
-* 🔍 Automatic frame & word parsing
+* 📦 Install Python packages (Online & Offline)
+* 📋 View installed modules
+* 🔥 Clean environment reset
 
-⚙️ **Data Processing**
+⚙️ **Offline Workflow**
 
-* 🔧 Adjustable frame and word offsets
-* ⚠️ Irregular sequence detection
+* 📤 Export `requirements.txt`
+* 📥 Download packages for offline use
+* 📦 Generate Full Offline Kit (ZIP + installer)
 
-📊 **Visualization**
+🧠 **Smart Operations**
 
-* 📊 Interactive frame visualizer
-* 📈 Frame distribution chart
+* ⚡ Smart install (only missing packages)
+* 🔍 Smart export (only new dependencies)
 
-📁 **Export & Reporting**
+📊 **User Experience**
 
-* 🧾 Generate detailed reports
-* 📤 Export structured CSV files
+* 📊 Real-time progress tracking
+* 💻 Terminal-style live logs
+* 🎨 Modern neon-themed UI
 
 ---
 
@@ -54,17 +61,15 @@ Built with a visually enhanced Neon Circuit interface using PyQt6, the tool prov
 
 ### 💻 Software
 
-* Visual Studio Code
-* Python 3.13.12
+* Python 3.12+
+* Windows OS (recommended)
 
 ### 📦 Libraries
 
 * PyQt6
-* PyMuPDF (fitz)
-* python-docx
 
 <p align="center">
-  <img src="https://skillicons.dev/icons?i=python,vscode"/>
+  <img src="https://skillicons.dev/icons?i=python"/>
 </p>
 
 ---
@@ -73,18 +78,40 @@ Built with a visually enhanced Neon Circuit interface using PyQt6, the tool prov
 
 ```mermaid
 flowchart LR
-A[Load File] --> B[Extract Frames]
-B --> C[Apply Offsets]
-C --> D[Validate Data]
-D --> E[Visualize]
-E --> F[Export Report/CSV]
+A[Online PC] --> B[Export Requirements]
+B --> C[Download Packages]
+C --> D[Transfer via USB]
+D --> E[Offline PC]
+E --> F[Install Packages]
 ```
+
+---
+
+## 🔄 Workflow
+
+### 🖥️ Online PC
+
+* Export environment
+* Download packages
+* Create Offline Kit
+
+### 💻 Offline PC
+
+* Transfer files
+* Install using PyPort
+* Update environment
 
 ---
 
 ## 🎯 Use Case
 
-This tool is ideal for telemetry engineers and developers who need to validate frame-word mappings, detect missing or inconsistent values, and generate structured datasets for further processing. It is particularly useful in environments where data integrity and precise mapping are critical, such as aerospace, defense, and embedded systems.
+PyPort is ideal for environments where internet access is restricted or unavailable:
+
+* 🔐 Secure labs (DRDO, defense systems)
+* 🏢 Enterprise isolated networks
+* 🧪 Testing environments
+
+It ensures reliable and controlled Python package deployment without external connectivity.
 
 ---
 
@@ -92,29 +119,34 @@ This tool is ideal for telemetry engineers and developers who need to validate f
 
 <p align="center">
   <b>Chiranjib Kar</b><br>
-  Co-Developer: Biswajit Das  
 </p>
 
 ---
 
-<p align="center">
-  <img src="https://capsule-render.vercel.app/api?type=waving&color=0:7c3cff,100:00f5ff&height=100&section=footer"/>
-</p>
-
 ## 📜 License & Usage
 
-This project is licensed under a **Custom Source-Available License**.
+This project is licensed under a **CBtronix Labs Source License v2.0 (CBLSL v2.0)**.
 
 ### ✅ You are allowed to:
-- Use the software for personal or commercial purposes
-- Run and distribute the software in its original form
+
+* Use the software for personal or commercial purposes
+* Run and distribute the software in its original form
+* * Modify, alter, or create derivative works from the source code
 
 ### ❌ You are NOT allowed to:
-- Modify, alter, or create derivative works from the source code
-- Redistribute modified versions of this software
-- Rebrand or sell this software as your own
+
+* Redistribute modified versions of this software
+* Rebrand or sell this software as your own
 
 ### ⚠️ Note:
-This is **not an open-source license**. The source code is provided for transparency and usage, but not for modification.
 
-For full terms, see the [LICENSE](./License) file.
+This is **not an open-source license**. The source code is provided for usage and transparency, but modification is strictly restricted.
+
+For full terms, see the [LICENSE](./LICENSE) file.
+
+---
+
+<p align="center">
+  <img src="https://capsule-render.vercel.app/api?type=waving&color=0:ff00e5,100:00e5ff&height=100&section=footer"/>
+</p>
+
