@@ -1,6 +1,7 @@
 import sys
 import os
 import re
+import json
 import subprocess
 import zipfile
 from importlib.metadata import distributions
@@ -10,7 +11,7 @@ from PyQt6.QtWidgets import (
     QTextEdit, QFileDialog, QLabel, QHBoxLayout,
     QLineEdit, QGroupBox, QProgressBar, QDialog,
     QGraphicsDropShadowEffect, QFrame, QSizePolicy,
-    QSplitter
+    QSplitter, QCheckBox, QScrollArea
 )
 from PyQt6.QtCore import (
     Qt, QThread, pyqtSignal, QTimer, QSize
@@ -218,6 +219,220 @@ class NeonDialog(QDialog):
 
 
 # ══════════════════════════════════════════════════════
+#  UPDATE LIBRARIES DIALOG (Checkboxes)
+# ══════════════════════════════════════════════════════
+class UpdateDialog(QDialog):
+    """Shows outdated packages with checkboxes for selective update."""
+
+    def __init__(self, parent, outdated_list):
+        """
+        outdated_list: list of dicts with keys:
+            name, version (current), latest_version, latest_filetype
+        """
+        super().__init__(parent)
+        self.selected_packages = []
+        self.outdated_list = outdated_list
+
+        self.setWindowTitle("Update Libraries")
+        self.setMinimumSize(520, 420)
+        self.setMaximumSize(620, 600)
+        self.setWindowFlags(Qt.WindowType.Dialog | Qt.WindowType.FramelessWindowHint)
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+
+        # ── Container ──
+        container = QFrame(self)
+        container.setObjectName("updateDlg")
+        container.setStyleSheet(f"""
+            #updateDlg {{
+                background-color: {NEON['bg_panel']};
+                border: 1px solid {NEON['green']};
+                border-radius: 16px;
+            }}
+        """)
+
+        root = QVBoxLayout(self)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.addWidget(container)
+
+        layout = QVBoxLayout(container)
+        layout.setContentsMargins(24, 20, 24, 20)
+        layout.setSpacing(12)
+
+        # ── Header ──
+        top = QHBoxLayout()
+        icon = QLabel("🔄")
+        icon.setStyleSheet("font-size: 26px; background: transparent;")
+        top.addWidget(icon)
+        title = QLabel(f"Updatable Libraries  ({len(outdated_list)})")
+        title.setStyleSheet(f"font-size: 17px; font-weight: bold; color: {NEON['green']}; background: transparent; font-family: 'Segoe UI';")
+        top.addWidget(title)
+        top.addStretch()
+        layout.addLayout(top)
+
+        sep = QFrame()
+        sep.setFrameShape(QFrame.Shape.HLine)
+        sep.setStyleSheet(f"background-color: {NEON['green']}; max-height: 1px; border: none;")
+        layout.addWidget(sep)
+
+        # ── Select All ──
+        self.select_all_cb = QCheckBox("Select All")
+        self.select_all_cb.setStyleSheet(f"""
+            QCheckBox {{
+                color: {NEON['yellow']};
+                font-size: 12px;
+                font-weight: bold;
+                font-family: 'Segoe UI';
+                spacing: 8px;
+                background: transparent;
+                padding: 4px 0;
+            }}
+            QCheckBox::indicator {{
+                width: 16px; height: 16px;
+                border: 2px solid {NEON['yellow']};
+                border-radius: 4px;
+                background-color: {NEON['bg_input']};
+            }}
+            QCheckBox::indicator:checked {{
+                background-color: {NEON['yellow']};
+                border-color: {NEON['yellow']};
+            }}
+        """)
+        self.select_all_cb.stateChanged.connect(self._toggle_all)
+        layout.addWidget(self.select_all_cb)
+
+        # ── Scrollable checkbox list ──
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        scroll.setStyleSheet(f"""
+            QScrollArea {{ border: none; background: transparent; }}
+            QScrollBar:vertical {{
+                background: {NEON['bg_dark']}; width: 6px; border-radius: 3px;
+            }}
+            QScrollBar::handle:vertical {{
+                background: {NEON['cyan_dim']}; border-radius: 3px; min-height: 20px;
+            }}
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; }}
+        """)
+
+        list_widget = QWidget()
+        list_layout = QVBoxLayout(list_widget)
+        list_layout.setContentsMargins(0, 0, 0, 0)
+        list_layout.setSpacing(4)
+
+        self.checkboxes = []
+
+        cb_style = f"""
+            QCheckBox {{
+                color: {NEON['text']};
+                font-size: 12px;
+                font-family: 'Consolas', monospace;
+                spacing: 8px;
+                background: transparent;
+                padding: 6px 8px;
+                border-bottom: 1px solid {NEON['border']};
+            }}
+            QCheckBox::indicator {{
+                width: 14px; height: 14px;
+                border: 2px solid {NEON['cyan_dim']};
+                border-radius: 3px;
+                background-color: {NEON['bg_input']};
+            }}
+            QCheckBox::indicator:checked {{
+                background-color: {NEON['green']};
+                border-color: {NEON['green']};
+            }}
+            QCheckBox:hover {{
+                background-color: #12121e;
+            }}
+        """
+
+        for pkg in outdated_list:
+            name = pkg["name"]
+            cur = pkg["version"]
+            latest = pkg["latest_version"]
+            cb = QCheckBox(f"{name}  {cur}  →  {latest}")
+            cb.setStyleSheet(cb_style)
+            cb.pkg_name = name  # store ref
+            self.checkboxes.append(cb)
+            list_layout.addWidget(cb)
+
+        list_layout.addStretch()
+        scroll.setWidget(list_widget)
+        layout.addWidget(scroll, stretch=1)
+
+        # ── Count label ──
+        self.count_label = QLabel("0 selected")
+        self.count_label.setStyleSheet(f"font-size: 11px; color: {NEON['text_dim']}; font-family: 'Consolas'; background: transparent;")
+        layout.addWidget(self.count_label)
+
+        # Connect checkboxes to update count
+        for cb in self.checkboxes:
+            cb.stateChanged.connect(self._update_count)
+
+        # ── Buttons ──
+        btn_row = QHBoxLayout()
+        btn_row.addStretch()
+
+        cancel_btn = QPushButton("Cancel")
+        cancel_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        cancel_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {NEON['bg_button']};
+                color: {NEON['text_dim']};
+                border: 1px solid {NEON['border']};
+                border-radius: 8px; padding: 8px 24px;
+                font-size: 12px; font-weight: bold; font-family: 'Segoe UI';
+            }}
+            QPushButton:hover {{ border-color: {NEON['text_dim']}; color: {NEON['text']}; }}
+        """)
+        cancel_btn.clicked.connect(self.reject)
+        btn_row.addWidget(cancel_btn)
+
+        update_btn = QPushButton("⬆️  Update Selected")
+        update_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        update_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {NEON['green']};
+                color: {NEON['bg_dark']};
+                border: none; border-radius: 8px;
+                padding: 8px 24px;
+                font-size: 12px; font-weight: bold; font-family: 'Segoe UI';
+            }}
+            QPushButton:hover {{ background-color: {NEON['cyan']}; }}
+        """)
+        update_btn.clicked.connect(self._do_update)
+        btn_row.addWidget(update_btn)
+
+        layout.addLayout(btn_row)
+
+        # ── Glow ──
+        shadow = QGraphicsDropShadowEffect()
+        shadow.setBlurRadius(40)
+        shadow.setColor(QColor(NEON["green"]))
+        shadow.setOffset(0, 0)
+        container.setGraphicsEffect(shadow)
+
+    def _toggle_all(self, state):
+        checked = state == Qt.CheckState.Checked.value
+        for cb in self.checkboxes:
+            cb.setChecked(checked)
+
+    def _update_count(self):
+        count = sum(1 for cb in self.checkboxes if cb.isChecked())
+        self.count_label.setText(f"{count} of {len(self.checkboxes)} selected")
+
+    def _do_update(self):
+        self.selected_packages = [
+            cb.pkg_name for cb in self.checkboxes if cb.isChecked()
+        ]
+        if not self.selected_packages:
+            NeonDialog.show_warning(self, "Nothing Selected", "Please select at least one package to update.")
+            return
+        self.accept()
+
+
+# ══════════════════════════════════════════════════════
 #  NEON BUTTON
 # ══════════════════════════════════════════════════════
 class NeonButton(QPushButton):
@@ -281,7 +496,6 @@ class CommandWorker(QThread):
                 self._line_count += 1
                 self.output_signal.emit(stripped)
 
-                # Parse pip percentage from output
                 pct_match = re.search(r'(\d+)%', stripped)
                 if pct_match:
                     self.progress_signal.emit(int(pct_match.group(1)))
@@ -304,6 +518,262 @@ class CommandWorker(QThread):
         except Exception as e:
             self.error_signal.emit(str(e))
             self.finished_status.emit(False)
+
+
+# ══════════════════════════════════════════════════════
+#  PIP JSON WORKER (for pip list / pip list --outdated)
+# ══════════════════════════════════════════════════════
+class PipJsonWorker(QThread):
+    """Runs a pip command that outputs JSON and returns parsed result."""
+    result_signal = pyqtSignal(list)      # parsed JSON list
+    error_signal = pyqtSignal(str)
+
+    def __init__(self, command):
+        super().__init__()
+        self.command = command
+
+    def run(self):
+        try:
+            result = subprocess.run(
+                self.command,
+                capture_output=True, text=True, shell=True
+            )
+            stdout = result.stdout.strip()
+            if stdout:
+                data = json.loads(stdout)
+                self.result_signal.emit(data)
+            else:
+                # pip list can return empty, or there was an error
+                if result.returncode != 0 and result.stderr.strip():
+                    self.error_signal.emit(result.stderr.strip())
+                else:
+                    self.result_signal.emit([])
+        except json.JSONDecodeError as e:
+            self.error_signal.emit(f"Failed to parse pip output: {e}")
+        except Exception as e:
+            self.error_signal.emit(str(e))
+
+
+# ══════════════════════════════════════════════════════
+#  FREEZE-TO-FILE WORKER (captures pip freeze → writes to file)
+# ══════════════════════════════════════════════════════
+class FreezeToFileWorker(QThread):
+    """Runs 'pip freeze', captures output, and writes it to a file.
+    Avoids shell '>' redirection which conflicts with subprocess.PIPE."""
+    output_signal = pyqtSignal(str)
+    finished_status = pyqtSignal(bool, str)  # (success, message)
+
+    def __init__(self, output_path):
+        super().__init__()
+        self.output_path = output_path
+
+    def run(self):
+        try:
+            result = subprocess.run(
+                "pip freeze",
+                capture_output=True, text=True, shell=True
+            )
+            if result.returncode != 0:
+                self.finished_status.emit(False, result.stderr.strip() or "pip freeze failed")
+                return
+
+            freeze_output = result.stdout.strip()
+            if not freeze_output:
+                self.finished_status.emit(False, "pip freeze returned empty output")
+                return
+
+            with open(self.output_path, "w") as f:
+                f.write(freeze_output)
+
+            line_count = len(freeze_output.splitlines())
+            self.output_signal.emit(f"Captured {line_count} packages")
+            self.finished_status.emit(True, self.output_path)
+
+        except Exception as e:
+            self.finished_status.emit(False, str(e))
+
+
+# ══════════════════════════════════════════════════════
+#  PIP CHECK WORKER (dependency health check)
+# ══════════════════════════════════════════════════════
+class _PipCheckWorker(QThread):
+    """Runs 'pip check' and reports dependency conflicts."""
+    result_signal = pyqtSignal(bool, str)  # (has_issues, output_text)
+
+    def run(self):
+        try:
+            result = subprocess.run(
+                "pip check",
+                capture_output=True, text=True, shell=True
+            )
+            output = result.stdout.strip()
+            # pip check returns exit code 1 if there are issues
+            has_issues = result.returncode != 0
+            if not output and not has_issues:
+                output = "No broken requirements found."
+            self.result_signal.emit(has_issues, output)
+        except Exception as e:
+            self.result_signal.emit(True, f"Failed to run pip check: {e}")
+
+
+# ══════════════════════════════════════════════════════
+#  OFFLINE KIT WORKER (all 3 steps in one thread)
+# ══════════════════════════════════════════════════════
+class OfflineKitWorker(QThread):
+    """Handles the full Offline Kit pipeline:
+    Step 1: pip freeze → requirements.txt
+    Step 2: pip download packages
+    Step 3: Create install.bat + zip
+    All in one thread to avoid chaining issues."""
+    output_signal = pyqtSignal(str)
+    progress_signal = pyqtSignal(int)
+    finished_status = pyqtSignal(bool, str)  # (success, message/path)
+
+    def __init__(self, base_dir):
+        super().__init__()
+        self.base_dir = base_dir
+
+    def run(self):
+        try:
+            kit_dir = os.path.join(self.base_dir, "Offline_Kit")
+            pkg_dir = os.path.join(kit_dir, "packages")
+            os.makedirs(pkg_dir, exist_ok=True)
+            req_path = os.path.join(kit_dir, "requirements.txt")
+
+            # ── Pre-flight: Dependency Health Check ──
+            self.output_signal.emit("🩺 Pre-flight — Checking dependency health...")
+            self.progress_signal.emit(2)
+
+            check = subprocess.run(
+                "pip check", capture_output=True, text=True, shell=True
+            )
+            if check.returncode != 0:
+                issues = check.stdout.strip()
+                self.output_signal.emit("⚠ Dependency conflicts detected:")
+                for line in issues.splitlines():
+                    if line.strip():
+                        self.output_signal.emit(f"  ⛔ {line.strip()}")
+                self.output_signal.emit(
+                    "⚠ Proceeding anyway — but some packages may fail to download."
+                )
+                self.output_signal.emit(
+                    "💡 Fix conflicts first, then rebuild the kit for best results."
+                )
+            else:
+                self.output_signal.emit("✅ Environment healthy — no conflicts")
+
+            self.progress_signal.emit(5)
+
+            # ── Step 1: Freeze ──
+            self.output_signal.emit("📦 Step 1/3 — Freezing requirements...")
+            self.progress_signal.emit(8)
+
+            freeze = subprocess.run(
+                "pip freeze",
+                capture_output=True, text=True, shell=True
+            )
+            if freeze.returncode != 0:
+                self.finished_status.emit(False, f"pip freeze failed: {freeze.stderr.strip()}")
+                return
+
+            freeze_output = freeze.stdout.strip()
+            if not freeze_output:
+                self.finished_status.emit(False, "pip freeze returned no packages")
+                return
+
+            with open(req_path, "w") as f:
+                f.write(freeze_output)
+
+            pkg_count = len(freeze_output.splitlines())
+            self.output_signal.emit(f"✅ Captured {pkg_count} packages")
+            self.progress_signal.emit(20)
+
+            # ── Step 2: Download ──
+            self.output_signal.emit("⬇️ Step 2/3 — Downloading packages...")
+
+            dl_cmd = f'pip download -r "{req_path}" pip setuptools wheel -d "{pkg_dir}"'
+            process = subprocess.Popen(
+                dl_cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                shell=True, text=True
+            )
+
+            line_count = 0
+            estimated_lines = (pkg_count + 3) * 3
+            for line in process.stdout:
+                stripped = line.rstrip()
+                if stripped:
+                    self.output_signal.emit(stripped)
+                    line_count += 1
+                    pct = min(20 + int(line_count / max(estimated_lines, 1) * 55), 75)
+                    self.progress_signal.emit(pct)
+
+            process.wait()
+            if process.returncode != 0:
+                self.output_signal.emit("⚠ Download had warnings (some packages may have failed)")
+
+            self.progress_signal.emit(78)
+
+            # ── Post-download: Validate packages folder ──
+            self.output_signal.emit("🔍 Validating downloaded packages...")
+            pkg_files = [
+                f for f in os.listdir(pkg_dir)
+                if f.endswith(('.whl', '.tar.gz', '.zip'))
+            ]
+
+            if not pkg_files:
+                self.output_signal.emit("❌ CRITICAL: No package files found in download folder!")
+                self.output_signal.emit(
+                    "💡 This usually means a dependency conflict caused pip download to fail."
+                )
+                self.output_signal.emit(
+                    "💡 Run 'Dependency Health Check' to identify the issue."
+                )
+                self.finished_status.emit(
+                    False,
+                    "Download produced 0 package files. Likely caused by a dependency "
+                    "conflict — run 'Dependency Health Check' from Common Tools to diagnose."
+                )
+                return
+
+            self.output_signal.emit(f"✅ {len(pkg_files)} package files downloaded")
+
+            if len(pkg_files) < pkg_count * 0.5:
+                self.output_signal.emit(
+                    f"⚠ Warning: Expected ~{pkg_count} packages but only got "
+                    f"{len(pkg_files)} files. Some may have failed to download."
+                )
+
+            self.progress_signal.emit(82)
+
+            # ── Step 3: Create install.bat + Zip ──
+            self.output_signal.emit("📁 Step 3/3 — Creating zip...")
+
+            bat_path = os.path.join(kit_dir, "install.bat")
+            with open(bat_path, "w") as f:
+                f.write('@echo off\n')
+                f.write('echo Installing packages from Offline Kit...\n')
+                f.write('pip install --no-index --find-links=packages -r requirements.txt\n')
+                f.write('echo Upgrading pip...\n')
+                f.write('python -m pip install --no-index --find-links=packages --upgrade pip\n')
+                f.write('echo Done!\n')
+                f.write('pause\n')
+
+            self.progress_signal.emit(90)
+
+            zip_path = os.path.join(self.base_dir, "Offline_Kit.zip")
+            with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as z:
+                for root_dir, _, files in os.walk(kit_dir):
+                    for file in files:
+                        fpath = os.path.join(root_dir, file)
+                        z.write(fpath, os.path.relpath(fpath, kit_dir))
+
+            self.progress_signal.emit(100)
+            self.output_signal.emit(f"✅ Offline Kit saved to: {zip_path}")
+            self.output_signal.emit(f"📦 Contains: {len(pkg_files)} packages")
+            self.finished_status.emit(True, zip_path)
+
+        except Exception as e:
+            self.finished_status.emit(False, str(e))
 
 
 # ══════════════════════════════════════════════════════
@@ -408,7 +878,7 @@ class PackageManager(QWidget):
             }}
         """)
 
-        # ── TOP HALF: Command Buttons ──
+        # ── TOP: Command Buttons ──
         cmd_panel = QWidget()
         cmd_layout = QVBoxLayout(cmd_panel)
         cmd_layout.setContentsMargins(0, 4, 0, 0)
@@ -422,6 +892,7 @@ class PackageManager(QWidget):
         self._add_btn(r1, "📋", "Show Installed Modules", self.show_packages, NEON["cyan"])
         self._add_btn(r1, "🐍", "Python Version", self.check_python_version, NEON["cyan"])
         self._add_btn(r1, "📌", "pip Version", self.check_pip_version, NEON["cyan"])
+        self._add_btn(r1, "🩺", "Dependency Health Check", self.dep_health_check, NEON["cyan"])
         cl.addLayout(r1)
         cmd_layout.addWidget(common_grp)
 
@@ -438,6 +909,7 @@ class PackageManager(QWidget):
         r3.setSpacing(6)
         self._add_btn(r3, "📦", "Full Offline Kit", self.prepare_offline_kit, NEON["green"])
         self._add_btn(r3, "⚡", "Smart Export (New Only)", self.smart_export, NEON["green"])
+        self._add_btn(r3, "🔄", "Check & Update Libraries", self.check_updates, NEON["green"])
         ol.addLayout(r3)
         cmd_layout.addWidget(online_grp)
 
@@ -456,16 +928,16 @@ class PackageManager(QWidget):
         ofl.addLayout(r5)
         cmd_layout.addWidget(offline_grp)
 
-        cmd_layout.addStretch()  # push groups to top
+        cmd_layout.addStretch()
         splitter.addWidget(cmd_panel)
 
-        # ── BOTTOM HALF: Progress + Terminal ──
+        # ── BOTTOM: Progress + Terminal ──
         terminal_panel = QWidget()
         term_layout = QVBoxLayout(terminal_panel)
         term_layout.setContentsMargins(0, 4, 0, 0)
         term_layout.setSpacing(4)
 
-        # Progress bar + percentage label
+        # Progress bar + label
         prog_row = QHBoxLayout()
         prog_row.setSpacing(8)
 
@@ -500,22 +972,16 @@ class PackageManager(QWidget):
         self.progress_label = QLabel("")
         self.progress_label.setFixedWidth(180)
         self.progress_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-        self.progress_label.setStyleSheet(f"""
-            font-size: 10px; color: {NEON['yellow']};
-            font-family: 'Consolas', monospace;
-        """)
+        self.progress_label.setStyleSheet(f"font-size: 10px; color: {NEON['yellow']}; font-family: 'Consolas', monospace;")
         self.progress_label.setVisible(False)
         prog_row.addWidget(self.progress_label)
 
         term_layout.addLayout(prog_row)
 
-        # Status indicator
+        # Status
         self.status_label = QLabel("● Ready")
         self.status_label.setFixedHeight(16)
-        self.status_label.setStyleSheet(f"""
-            font-size: 10px; color: {NEON['green']};
-            font-family: 'Consolas', monospace; padding: 0 2px;
-        """)
+        self.status_label.setStyleSheet(f"font-size: 10px; color: {NEON['green']}; font-family: 'Consolas', monospace; padding: 0 2px;")
         term_layout.addWidget(self.status_label)
 
         # Terminal
@@ -538,7 +1004,6 @@ class PackageManager(QWidget):
 
         splitter.addWidget(terminal_panel)
 
-        # ── Proportions: 55% commands, 45% terminal ──
         splitter.setSizes([430, 340])
         splitter.setCollapsible(0, False)
         splitter.setCollapsible(1, False)
@@ -546,13 +1011,10 @@ class PackageManager(QWidget):
         root.addWidget(splitter, stretch=1)
 
         # ═══════════ FOOTER ═══════════
-        footer = QLabel("PyPort v2.0  ·  Offline Python Environment Manager")
+        footer = QLabel("PyPort v2.1  ·  Offline Python Environment Manager")
         footer.setAlignment(Qt.AlignmentFlag.AlignCenter)
         footer.setFixedHeight(18)
-        footer.setStyleSheet(f"""
-            font-size: 9px; color: {NEON['text_dim']};
-            letter-spacing: 2px; font-family: 'Segoe UI';
-        """)
+        footer.setStyleSheet(f"font-size: 9px; color: {NEON['text_dim']}; letter-spacing: 2px; font-family: 'Segoe UI';")
         root.addWidget(footer)
 
         self.setLayout(root)
@@ -665,7 +1127,7 @@ class PackageManager(QWidget):
         elif pct < 100:
             self.progress_label.setText(f"{pct}%  ⚡ Almost there...")
         else:
-            self.progress_label.setText(f"100%  ✓ Complete")
+            self.progress_label.setText("100%  ✓ Complete")
 
     def run_command(self, command, success_msg=None, error_msg=None,
                     expected_lines=0, indeterminate=True):
@@ -713,31 +1175,38 @@ class PackageManager(QWidget):
     #  COMMON
     # ══════════════════════════════════════════════
     def show_packages(self):
+        """
+        FIX: Uses 'pip list --format=json' via subprocess instead of
+        importlib.metadata.distributions() which can miss packages
+        depending on how the Python env is configured.
+        """
         self.log.clear()
         self.set_status("Loading installed modules...", NEON["cyan"])
-        self.start_progress(indeterminate=False)
+        self.start_progress(indeterminate=True)
 
-        pkgs = list(distributions())
-        total = len(pkgs)
-        count = 0
+        self._pip_list_worker = PipJsonWorker("pip list --format=json")
+        self._pip_list_worker.result_signal.connect(self._on_packages_loaded)
+        self._pip_list_worker.error_signal.connect(self._on_packages_error)
+        self._pip_list_worker.finished.connect(self.stop_progress)
+        self._pip_list_worker.start()
 
-        for i, dist in enumerate(pkgs):
-            if dist.metadata['Name']:
-                name = dist.metadata['Name']
-                ver = dist.version
-                self.log.append(
-                    f'<span style="color:{NEON["cyan"]};">{name}</span>'
-                    f'<span style="color:{NEON["text_dim"]};">==</span>'
-                    f'<span style="color:{NEON["green"]};">{ver}</span>'
-                )
-                count += 1
-            pct = int((i + 1) / total * 100) if total else 100
-            self._update_progress(pct)
-            QApplication.processEvents()
-
+    def _on_packages_loaded(self, packages):
+        self.log.clear()
+        for pkg in packages:
+            name = pkg.get("name", "?")
+            ver = pkg.get("version", "?")
+            self.log.append(
+                f'<span style="color:{NEON["cyan"]};">{name}</span>'
+                f'<span style="color:{NEON["text_dim"]};">==</span>'
+                f'<span style="color:{NEON["green"]};">{ver}</span>'
+            )
+        count = len(packages)
         self.log.append(f'\n<span style="color:{NEON["yellow"]};">📦 Total: {count} packages</span>')
         self.set_status(f"{count} packages found", NEON["green"])
-        self.stop_progress()
+
+    def _on_packages_error(self, err):
+        self.log.append(f'<span style="color:{NEON["red"]};">❌ Failed to list packages: {err}</span>')
+        self.set_status("Error loading packages", NEON["red"])
 
     def check_python_version(self):
         self.log.clear()
@@ -746,6 +1215,40 @@ class PackageManager(QWidget):
     def check_pip_version(self):
         self.log.clear()
         self.run_command("pip --version", "pip version retrieved")
+
+    def dep_health_check(self):
+        """Runs 'pip check' to detect broken dependencies, version
+        conflicts, and missing packages before they cause silent failures."""
+        self.log.clear()
+        self.log.append(f'<span style="color:{NEON["cyan"]};">🩺 Running dependency health check...</span>')
+        self.start_progress(indeterminate=True)
+
+        self._health_thread = _PipCheckWorker()
+        self._health_thread.result_signal.connect(self._on_health_result)
+        self._health_thread.finished.connect(self.stop_progress)
+        self._health_thread.start()
+
+    def _on_health_result(self, has_issues, output):
+        if has_issues:
+            self.log.append(f'<span style="color:{NEON["red"]};">⚠ Dependency conflicts detected:</span>')
+            for line in output.splitlines():
+                if line.strip():
+                    self.log.append(f'<span style="color:{NEON["yellow"]};">  ⛔ {line.strip()}</span>')
+            self.log.append(
+                f'\n<span style="color:{NEON["text_dim"]};">💡 Fix: pip install [package]==correct_version  '
+                f'or  pip install [package] --upgrade</span>'
+            )
+            self.set_status("Dependency issues found!", NEON["red"])
+            NeonDialog.show_warning(
+                self, "Dependency Issues Found",
+                f"pip check detected {len(output.strip().splitlines())} issue(s).\n\n"
+                "These conflicts can cause 'Full Offline Kit' or 'Smart Export' to "
+                "fail silently with empty packages.",
+                "Check the terminal log for details. Fix conflicts before building kits."
+            )
+        else:
+            self.log.append(f'<span style="color:{NEON["green"]};">✅ No dependency conflicts found — environment is healthy!</span>')
+            self.set_status("Environment healthy", NEON["green"])
 
     def install_package(self):
         pkg = self.package_input.text().strip()
@@ -768,10 +1271,29 @@ class PackageManager(QWidget):
     # ══════════════════════════════════════════════
     def export_requirements(self):
         path, _ = QFileDialog.getSaveFileName(self, "Save requirements.txt", "requirements.txt", "Text Files (*.txt)")
-        if path:
-            self.run_command(f'pip freeze > "{path}"', f"Exported to {os.path.basename(path)}", "Export failed")
-        else:
+        if not path:
             NeonDialog.show_info(self, "Cancelled", "Export was cancelled.")
+            return
+
+        self.log.append(f'<span style="color:{NEON["cyan"]};">📝 Exporting requirements...</span>')
+        self.start_progress(indeterminate=True)
+
+        self._freeze_worker = FreezeToFileWorker(path)
+        self._freeze_worker.output_signal.connect(self._log_output)
+        self._freeze_worker.finished_status.connect(
+            lambda ok, msg: self._on_export_done(ok, msg, path)
+        )
+        self._freeze_worker.finished.connect(self.stop_progress)
+        self._freeze_worker.start()
+
+    def _on_export_done(self, success, message, path):
+        if success:
+            self.log.append(f'<span style="color:{NEON["green"]};">✅ Exported to {os.path.basename(path)}</span>')
+            self.set_status(f"Exported to {os.path.basename(path)}", NEON["green"])
+        else:
+            self.log.append(f'<span style="color:{NEON["red"]};">❌ Export failed: {message}</span>')
+            NeonDialog.show_error(self, "Export Failed", "Could not export requirements.", message)
+            self.set_status("Export failed", NEON["red"])
 
     def download_packages(self):
         file_path, _ = QFileDialog.getOpenFileName(self, "Select requirements.txt", "", "Text Files (*.txt)")
@@ -800,68 +1322,102 @@ class PackageManager(QWidget):
         self.log.append(f'<span style="color:{NEON["green"]};">⬆️ Updating pip online...</span>')
         self.run_command("python -m pip install --upgrade pip", "pip updated successfully", "pip update failed")
 
+    def check_updates(self):
+        """Check for outdated packages and show update dialog."""
+        self.log.clear()
+        self.log.append(f'<span style="color:{NEON["green"]};">🔄 Checking for outdated libraries... (this may take a moment)</span>')
+        self.set_status("Checking for updates...", NEON["yellow"])
+        self.start_progress(indeterminate=True)
+
+        self._outdated_worker = PipJsonWorker("pip list --outdated --format=json")
+        self._outdated_worker.result_signal.connect(self._on_outdated_loaded)
+        self._outdated_worker.error_signal.connect(self._on_outdated_error)
+        self._outdated_worker.finished.connect(self.stop_progress)
+        self._outdated_worker.start()
+
+    def _on_outdated_loaded(self, outdated):
+        if not outdated:
+            NeonDialog.show_success(
+                self, "All Up to Date!",
+                "Every installed package is already at the latest version."
+            )
+            self.set_status("All libraries up to date", NEON["green"])
+            self.log.append(f'<span style="color:{NEON["green"]};">✅ All packages are up to date!</span>')
+            return
+
+        # Log what was found
+        self.log.append(
+            f'<span style="color:{NEON["yellow"]};">📦 Found {len(outdated)} outdated packages:</span>'
+        )
+        for pkg in outdated:
+            self.log.append(
+                f'<span style="color:{NEON["text_dim"]};">  '
+                f'<span style="color:{NEON["cyan"]};">{pkg["name"]}</span>  '
+                f'{pkg["version"]}  →  '
+                f'<span style="color:{NEON["green"]};">{pkg["latest_version"]}</span>'
+                f'</span>'
+            )
+
+        self.set_status(f"{len(outdated)} updates available", NEON["yellow"])
+
+        # Show update dialog
+        dialog = UpdateDialog(self, outdated)
+        if dialog.exec() == QDialog.DialogCode.Accepted and dialog.selected_packages:
+            selected = dialog.selected_packages
+            self.log.append(
+                f'\n<span style="color:{NEON["green"]};">⬆️ Upgrading {len(selected)} packages...</span>'
+            )
+            pkg_str = " ".join(selected)
+            self.run_command(
+                f"pip install --upgrade {pkg_str}",
+                success_msg=f"{len(selected)} packages updated successfully",
+                error_msg="Some packages failed to update",
+                expected_lines=len(selected) * 4
+            )
+        else:
+            self.set_status("Update cancelled", NEON["text_dim"])
+
+    def _on_outdated_error(self, err):
+        self.log.append(f'<span style="color:{NEON["red"]};">❌ Failed to check updates: {err}</span>')
+        NeonDialog.show_error(
+            self, "Update Check Failed",
+            "Could not check for outdated packages.",
+            str(err)
+        )
+        self.set_status("Update check failed", NEON["red"])
+
     def prepare_offline_kit(self):
         base_dir = QFileDialog.getExistingDirectory(self, "Select Folder for Offline Kit")
         if not base_dir:
             return
 
-        self.kit_dir = os.path.join(base_dir, "Offline_Kit")
-        self.pkg_dir = os.path.join(self.kit_dir, "packages")
-        os.makedirs(self.pkg_dir, exist_ok=True)
-        self.req = os.path.join(self.kit_dir, "requirements.txt")
-
-        self.log.append(f'<span style="color:{NEON["cyan"]};">📦 Step 1/3 — Freezing requirements...</span>')
+        self.log.clear()
+        self.log.append(f'<span style="color:{NEON["cyan"]};">📦 Building Full Offline Kit...</span>')
         self.start_progress(indeterminate=False)
-        self._update_progress(10)
+        self._update_progress(2)
 
-        self.worker = CommandWorker(f'pip freeze > "{self.req}"')
-        self.worker.output_signal.connect(self._log_output)
+        self._kit_worker = OfflineKitWorker(base_dir)
+        self._kit_worker.output_signal.connect(self._log_output)
+        self._kit_worker.progress_signal.connect(self._update_progress)
+        self._kit_worker.finished_status.connect(self._on_kit_done)
+        self._kit_worker.finished.connect(self.stop_progress)
+        self._kit_worker.start()
 
-        def step2():
-            self._update_progress(30)
-            self.log.append(f'<span style="color:{NEON["green"]};">⬇️ Step 2/3 — Downloading packages...</span>')
-
-            self.worker2 = CommandWorker(
-                f'pip download -r "{self.req}" pip setuptools wheel -d "{self.pkg_dir}"'
+    def _on_kit_done(self, success, message):
+        if success:
+            NeonDialog.show_success(
+                self, "Offline Kit Ready!",
+                "Full offline kit has been created and zipped.",
+                f"Location: {message}"
             )
-            self.worker2.output_signal.connect(self._log_output)
-            self.worker2.progress_signal.connect(
-                lambda p: self._update_progress(30 + int(p * 0.5))
+            self.set_status("Offline Kit created", NEON["green"])
+        else:
+            NeonDialog.show_error(
+                self, "Offline Kit Failed",
+                "Something went wrong building the kit.",
+                message
             )
-
-            def step3():
-                self._update_progress(85)
-                self.log.append(f'<span style="color:{NEON["yellow"]};">📁 Step 3/3 — Creating zip...</span>')
-
-                with open(os.path.join(self.kit_dir, "install.bat"), "w") as f:
-                    f.write('@echo off\n')
-                    f.write('echo Installing packages from Offline Kit...\n')
-                    f.write('pip install --no-index --find-links=packages -r requirements.txt\n')
-                    f.write('echo Upgrading pip...\n')
-                    f.write('python -m pip install --no-index --find-links=packages --upgrade pip\n')
-                    f.write('echo Done!\n')
-                    f.write('pause\n')
-
-                zip_path = os.path.join(base_dir, "Offline_Kit.zip")
-                with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as z:
-                    for root_dir, _, files in os.walk(self.kit_dir):
-                        for file in files:
-                            path = os.path.join(root_dir, file)
-                            z.write(path, os.path.relpath(path, self.kit_dir))
-
-                self.stop_progress()
-                NeonDialog.show_success(
-                    self, "Offline Kit Ready!",
-                    "Full offline kit has been created and zipped.",
-                    f"Location: {zip_path}"
-                )
-                self.set_status("Offline Kit created", NEON["green"])
-
-            self.worker2.finished.connect(step3)
-            self.worker2.start()
-
-        self.worker.finished.connect(step2)
-        self.worker.start()
+            self.set_status("Kit creation failed", NEON["red"])
 
     def smart_export(self):
         prev_file, _ = QFileDialog.getOpenFileName(self, "Select Previous requirements.txt", "", "Text Files (*.txt)")
@@ -922,6 +1478,31 @@ class PackageManager(QWidget):
         def on_done():
             self._update_progress(85)
 
+            # ── Post-download: Validate ──
+            pkg_files = [
+                f for f in os.listdir(pkg_dir)
+                if f.endswith(('.whl', '.tar.gz', '.zip'))
+            ]
+
+            if not pkg_files:
+                self.stop_progress()
+                self.log.append(
+                    f'<span style="color:{NEON["red"]};">❌ No package files downloaded! '
+                    f'Possible dependency conflict.</span>'
+                )
+                NeonDialog.show_error(
+                    self, "Smart Export Failed",
+                    "Download produced 0 package files.",
+                    "A dependency conflict likely caused pip download to fail. "
+                    "Run 'Dependency Health Check' from Common Tools to diagnose."
+                )
+                self.set_status("Smart export failed — 0 files", NEON["red"])
+                return
+
+            self.log.append(
+                f'<span style="color:{NEON["green"]};">✅ {len(pkg_files)} package files downloaded</span>'
+            )
+
             with open(os.path.join(kit_dir, "install.bat"), "w") as f:
                 f.write("@echo off\n")
                 f.write("echo Installing NEW packages only...\n")
@@ -940,7 +1521,7 @@ class PackageManager(QWidget):
             self.stop_progress()
             NeonDialog.show_success(
                 self, "Smart Kit Ready!",
-                f"Created kit with {len(new_packages)} new packages.",
+                f"Created kit with {len(pkg_files)} package files ({len(new_packages)} new packages).",
                 f"Location: {zip_path}"
             )
             self.set_status("Smart Offline Kit created", NEON["green"])
